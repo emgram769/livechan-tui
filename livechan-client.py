@@ -3,6 +3,7 @@ import urllib2
 import cookielib
 import os
 import json
+from websocket import create_connection
 
 cookies = cookielib.LWPCookieJar()
 handlers = [
@@ -79,6 +80,10 @@ login()
 chat_room = raw_input("choose room: ")
 print
 get_data(chat_room)
-main_chat(chat_room)
+ws = create_connection("wss://livechan.net/")
+result =  ws.recv()
+print "Received '%s'" % result
+ws.close()
+#main_chat(chat_room)
 
 print "done"
