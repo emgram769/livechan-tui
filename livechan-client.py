@@ -16,6 +16,9 @@ handlers = [
     ]
 opener = urllib2.build_opener(*handlers)
 
+curr_chat_room = None
+socketIO = None
+
 def fetch(uri):
     req = urllib2.Request(uri)
     return opener.open(req)
@@ -24,10 +27,6 @@ def post(uri, params):
     data = urllib.urlencode(params)
     req = urllib2.Request(uri, data)
     return opener.open(req)
-
-def dump():
-    for cookie in cookies:
-        print cookie.name, "=", cookie.value
 
 def get_password():
     for cookie in cookies:
@@ -62,56 +61,62 @@ def login():
     livechan_pass = get_password()
     if livechan_pass == "":
         login()
-    return livechan_pass
+
+    global socketIO
+    socketIO = SocketIO('https://livechan.net',
+        cookies={'password_livechan': livechan_pass})
+    socketIO.on('chat', on_chat)
+    socketIO.on('user_count', on_user_count)
+    thread.start_new_thread ( socketIO.wait, () )
+
+
+def join_chat(chat_room):
+    global curr_chat_room
+    global socketIO
+    if (curr_chat_room != None):
+        socketIO.emit('unsubscribe', curr_chat_room);
+    socketIO.emit('subscribe', chat_room);
+    get_data(chat_room)
+
+def display_chat(chat_obj):
+    print chat_obj["name"]
+    print chat_obj["body"]
+    print
 
 def get_data(chat):
     data_response = fetch('https://livechan.net/data/'+chat)
     json_data = json.loads(data_response.read())
     for i in json_data[::-1]:
-        print i[u"name"]
-        print i[u"body"]
-        print
+        display_chat(i)
 
-def main_chat(chat):
+def main_chat(chat_room):
     chat_body = raw_input("> ")
-    mainresp = post_chat(chat_body, chat)
-    print mainresp.read()
+    if (chat_body == "/quit"):
+        return True # break
+    mainresp = post_chat(chat_body, chat_room)
+    return False
+    #print mainresp.read()
 
 def on_chat(*args):
-    print 'chat', args
+    display_chat(args[0])
 
 def on_user_count(*args):
-    print 'chat', args
+    print args[0], "users online"
+    print
 
 #import logging
 #logging.basicConfig(level=logging.DEBUG)
 
 #login
-cookie = login()
+login()
 
 chat_room = raw_input("choose room: ")
-print
-get_data(chat_room)
+join_chat(chat_room)
 
-socketIO = SocketIO('https://livechan.net',
-        cookies={'password_livechan': cookie})
-
-socketIO.on('chat', on_chat)
-socketIO.on('user_count', on_user_count)
-socketIO.emit('subscribe', chat_room);
-
-thread.start_new_thread ( socketIO.wait, () )
-
-#stdscr = curses.initscr()
-#curses.noecho()
-#curses.cbreak()
-#stdscr.keypad(1)
-
-while(True):
-    main_chat(chat_room)
+while 1:
+    if(main_chat(chat_room)):
+        break
     time.sleep(7)
-
-#main_chat(chat_room)
 
 print "done"
 
